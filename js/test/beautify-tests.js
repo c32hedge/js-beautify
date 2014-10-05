@@ -135,59 +135,65 @@ function run_beautifier_tests(test_obj, Urlencoded, js_beautify, html_beautify, 
             // run the tests that need permutation against a specific combination of
             // pre-opening-brace and pre-closing-brace whitespace
             function run_brace_permutation(test_open_white, test_close_white) {
-                var to = test_open_white,
-                    tc = test_close_white,
-                    eo = expect_open_white ? expect_open_white : to === '' ? ' ' : to,
-                    ec = expect_close_white ? expect_close_white : tc === '' ? ' ' : tc,
-                    i = eo === '\n' ? indent_on_wrap_str: '';
+                var ws = new function() {
+                    this._to_ = test_open_white;
+                    this._tc_ = test_close_white;
+                    this._eo_ = expect_open_white ? expect_open_white : this._to_ === '' ? ' ' : this._to_;
+                    this._eonospace_ = this._eo_ == ' ' ? '' : this._eo_;
+                    this._ec_ = expect_close_white ? expect_close_white : this._tc_ === '' ? ' ' : this._tc_;
+                    this._i_ = this._eo_ === '\n' ? indent_on_wrap_str: '';
+                };
 
-                bt( '//case 1\nif (a == 1)' + to + '{}\n//case 2\nelse if (a == 2)' + to + '{}',
-                    '//case 1\nif (a == 1)' + eo + '{}\n//case 2\nelse if (a == 2)' + eo + '{}');
-                bt( 'if(1)' + to + '{2}' + tc + 'else' + to + '{3}',
-                    'if (1)' + eo + '{\n    2\n}' + ec + 'else' + eo + '{\n    3\n}');
-                bt( 'try' + to + '{a();}' + tc +
-                    'catch(b)' + to + '{c();}' + tc +
-                    'catch(d)' + to + '{}' + tc +
-                    'finally' + to + '{e();}',
-                    // expected
-                    'try' + eo + '{\n    a();\n}' + ec +
-                    'catch (b)' + eo + '{\n    c();\n}' + ec +
-                    'catch (d)' + eo + '{}' + ec +
-                    'finally' + eo + '{\n    e();\n}');
-                bt( 'if(a)' + to + '{b();}' + tc + 'else if(c) foo();',
-                    'if (a)' + eo + '{\n    b();\n}' + ec + 'else if (c) foo();');
+                function btbr(input, expected) {
+                    bt(input.replace(/_[a-z]+_/g, function(matched) { return ws[matched]; }),
+                       expected.replace(/_[a-z]+_/g, function(matched) { return ws[matched]; }));
+                }
+
+                function test_br_fragment(input, expected) {
+                    test_fragment(input.replace(/_[a-z]{1,2}_/g, function(matched) { return ws[matched]; }),
+                                  expected.replace(/_[a-z]{1,2}_/g, function(matched) { return ws[matched]; }));
+                }
+
+                btbr( '//case 1\nif (a == 1)_to_{}\n//case 2\nelse if (a == 2)_to_{}',
+                    '//case 1\nif (a == 1)_eo_{}\n//case 2\nelse if (a == 2)_eo_{}');
+                btbr( 'if(1)_to_{2}_tc_else_to_{3}',
+                    'if (1)_eo_{\n    2\n}_ec_else_eo_{\n    3\n}');
+                btbr( 'try_to_{a();}_tc_catch(b)_to_{c();}_tc_catch(d)_to_{}_tc_finally_to_{e();}',
+                    'try_eo_{\n    a();\n}_ec_catch (b)_eo_{\n    c();\n}_ec_catch (d)_eo_{}_ec_finally_eo_{\n    e();\n}');
+                btbr( 'if(a)_to_{b();}_tc_else if(c) foo();',
+                    'if (a)_eo_{\n    b();\n}_ec_else if (c) foo();');
                 // if/else statement with empty body
-                bt( 'if (a)' + to + '{\n// comment\n}' + tc + 'else' + to + '{\n// comment\n}',
-                    'if (a)' + eo + '{\n    // comment\n}' + ec + 'else' + eo + '{\n    // comment\n}');
-                bt( 'if (x)' + to + '{y}' + tc + 'else' + to + '{ if (x)' + to + '{y}}',
-                    'if (x)' + eo + '{\n    y\n}' + ec + 'else' + eo + '{\n    if (x)' + eo + i + '{\n        y\n    }\n}');
-                bt( 'if (a)' + to + '{\nb;\n}' + tc + 'else' + to + '{\nc;\n}',
-                    'if (a)' + eo + '{\n    b;\n}' + ec + 'else' + eo + '{\n    c;\n}');
-                test_fragment('    /*\n* xx\n*/\n// xx\nif (foo)' + to + '{\n    bar();\n}',
-                              '    /*\n     * xx\n     */\n    // xx\n    if (foo)' + eo + i + '{\n        bar();\n    }');
-                bt( 'if (foo)' + to + '{}' + tc + 'else /regex/.test();',
-                    'if (foo)' + eo + '{}' + ec + 'else /regex/.test();');
-                test_fragment('if (foo)' + to + '{', 'if (foo)' + eo + '{');
-                test_fragment('foo' + to + '{', 'foo' + eo + '{');
-                test_fragment('return;' + to + '{', 'return;' + eo + '{');
-                bt( 'function x()' + to + '{\n    foo();\n}zzz', 'function x()' + eo +'{\n    foo();\n}\nzzz');
-                bt( 'var a = new function a()' + to + '{};', 'var a = new function a()' + eo + '{};');
-                bt( 'var a = new function a()' + to + '    {},\n    b = new function b()' + to + '    {};',
-                    'var a = new function a()' + eo + i + '{},\n    b = new function b()' + eo + i + '{};');
-                bt("foo(" + to + "{\n    'a': 1\n},\n10);",
-                   "foo(" + (eo === ' ' ? '' : eo) + i + "{\n        'a': 1\n    },\n    10);"); // "foo( {..." is a weird case
-                bt('(["foo","bar"]).each(function(i)' + to + '{return i;});',
-                   '(["foo", "bar"]).each(function(i)' + eo + '{\n    return i;\n});');
-                bt('(function(i)' + to + '{return i;})();', '(function(i)' + eo + '{\n    return i;\n})();');
+                btbr( 'if (a)_to_{\n// comment\n}_tc_else_to_{\n// comment\n}',
+                    'if (a)_eo_{\n    // comment\n}_ec_else_eo_{\n    // comment\n}');
+                btbr( 'if (x)_to_{y}_tc_else_to_{ if (x)_to_{y}}',
+                    'if (x)_eo_{\n    y\n}_ec_else_eo_{\n    if (x)_eo__i_{\n        y\n    }\n}');
+                btbr( 'if (a)_to_{\nb;\n}_tc_else_to_{\nc;\n}',
+                    'if (a)_eo_{\n    b;\n}_ec_else_eo_{\n    c;\n}');
+                test_br_fragment('    /*\n* xx\n*/\n// xx\nif (foo)_to_{\n    bar();\n}',
+                              '    /*\n     * xx\n     */\n    // xx\n    if (foo)_eo__i_{\n        bar();\n    }');
+                btbr( 'if (foo)_to_{}_tc_else /regex/.test();',
+                    'if (foo)_eo_{}_ec_else /regex/.test();');
+                test_br_fragment('if (foo)_to_{', 'if (foo)_eo_{');
+                test_br_fragment('foo_to_{', 'foo_eo_{');
+                test_br_fragment('return;_to_{', 'return;_eo_{');
+                btbr( 'function x()_to_{\n    foo();\n}zzz', 'function x()_eo_{\n    foo();\n}\nzzz');
+                btbr( 'var a = new function a()_to_{};', 'var a = new function a()_eo_{};');
+                btbr( 'var a = new function a()_to_    {},\n    b = new function b()_to_    {};',
+                    'var a = new function a()_eo__i_{},\n    b = new function b()_eo__i_{};');
+                btbr("foo(_to_{\n    'a': 1\n},\n10);",
+                   "foo(_eonospace__i_{\n        'a': 1\n    },\n    10);"); // "foo( {..." is a weird case
+                btbr('(["foo","bar"]).each(function(i)_to_{return i;});',
+                   '(["foo", "bar"]).each(function(i)_eo_{\n    return i;\n});');
+                btbr('(function(i)_to_{return i;})();', '(function(i)_eo_{\n    return i;\n})();');
 
-                bt( "test( /*Argument 1*/" + to + "{\n" +
+                btbr( "test( /*Argument 1*/_to_{\n" +
                     "    'Value1': '1'\n" +
                     "}, /*Argument 2\n" +
                     " */ {\n" +
                     "    'Value2': '2'\n" +
                     "});",
                     // expected
-                    "test( /*Argument 1*/" + eo + i + "{\n" +
+                    "test( /*Argument 1*/_eo__i_{\n" +
                     "        'Value1': '1'\n" +
                     "    },\n" +
                     "    /*Argument 2\n" +
@@ -196,7 +202,7 @@ function run_beautifier_tests(test_obj, Urlencoded, js_beautify, html_beautify, 
                     "        'Value2': '2'\n" +
                     "    });");
 
-                bt( "test( /*Argument 1*/" + to + "{\n" +
+                btbr( "test( /*Argument 1*/_to_{\n" +
                     "    'Value1': '1'\n" +
                     "}, /*Argument 2\n" +
                     " */\n" +
@@ -204,7 +210,7 @@ function run_beautifier_tests(test_obj, Urlencoded, js_beautify, html_beautify, 
                     "    'Value2': '2'\n" +
                     "});",
                     // expected
-                    "test( /*Argument 1*/" + eo + i + "{\n" +
+                    "test( /*Argument 1*/_eo__i_{\n" +
                     "        'Value1': '1'\n" +
                     "    },\n" +
                     "    /*Argument 2\n" +
